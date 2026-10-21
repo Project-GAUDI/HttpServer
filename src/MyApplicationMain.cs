@@ -399,7 +399,7 @@ namespace IotedgeV2HttpServer
                 }
             }
 
-            if(true == restartFlag)
+            if (restartFlag)
             {
                 var exitmsg = $"restartFlag = {restartFlag}";
                 MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: HandleHttpRequests caused by {exitmsg}");
