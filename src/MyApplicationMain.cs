@@ -19,6 +19,8 @@ namespace IotedgeV2HttpServer
         static ILogger MyLogger { get; } = LoggerFactory.GetLogger(typeof(MyApplicationMain));
         const string PROPERTY_KEY_OUTPUT = "output";
         const string DEFAULT_PROPERTY_OUTPUT = "output";
+        const int RESTART_RETRY_INTERVAL_MS = 30000;
+        const int RESTART_MAX_RETRY_COUNT = 10;
         static CancellationTokenSource cts = new CancellationTokenSource();
         static string outputName = DEFAULT_PROPERTY_OUTPUT;
         static HttpListener listener = null;
@@ -27,12 +29,40 @@ namespace IotedgeV2HttpServer
         {
             public ExclusiveException(string message) : base(message) { }
         }
+        private int _disposed = 0; // 0: false, 1: true
 
-        public void Dispose()
+        /// <summary>
+        /// リソース解放
+        /// </summary>
+        /// <returns></returns>
+        public async ValueTask DisposeAsync()
         {
-            MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Start Method: Dispose");
+            MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Start Method: DisposeAsync");
 
-            MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"End Method: Dispose");
+            // 2重実行防止
+            if (Interlocked.Exchange(ref _disposed, 1) == 1)
+            {
+                MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: Already disposed, skipping DisposeAsync");
+                return;
+            }
+
+            try
+            {
+                // ここでApplicationMainのリソース解放処理を行う
+                // 非同期リソースがある場合は適切に解放する
+                // ＝＝＝＝＝＝＝＝＝＝＝＝＝ここから＝＝＝＝＝＝＝＝＝＝＝＝＝
+
+                await Task.CompletedTask; // 非同期リソース解放処理をここに記述
+
+                // ＝＝＝＝＝＝＝＝＝＝＝＝＝ここまで＝＝＝＝＝＝＝＝＝＝＝＝＝
+            }
+            catch (Exception ex)
+            {
+                MyLogger.WriteLog(ILogger.LogLevel.ERROR, $"Error in DisposeAsync: {ex.Message}", true);
+                // 例外は再スローしない（Disposeでは通常例外を抑制）
+            }
+
+            MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"End Method: DisposeAsync");
         }
 
         /// <summary>
@@ -62,7 +92,6 @@ namespace IotedgeV2HttpServer
         /// アプリケーション起動処理					
         /// システム初期化完了後に呼び出される
         /// </summary>
-        /// <param name=""></param>
         /// <returns></returns>
         public async Task<bool> StartAsync()
         {
@@ -142,21 +171,12 @@ namespace IotedgeV2HttpServer
             try
             {
                 // output
-                if (desiredProperties.ContainsKey(PROPERTY_KEY_OUTPUT))
-                {
-                    outputName = Util.GetRequiredValue<string>(desiredProperties, PROPERTY_KEY_OUTPUT);
-                }
-                else
-                {
-                    outputName = DEFAULT_PROPERTY_OUTPUT;
-                }
+                outputName = Util.GetDesiredProperty<string>(desiredProperties, PROPERTY_KEY_OUTPUT,false,DEFAULT_PROPERTY_OUTPUT);
                 retStatus = true;
             }
             catch (Exception ex)
             {
-                var errmsg = $"Property {PROPERTY_KEY_OUTPUT} does not exist : {ex.ToString()}";
-                MyLogger.WriteLog(ILogger.LogLevel.ERROR, $"{errmsg}", true);
-                MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: OnDesiredPropertiesReceivedAsync caused by {errmsg}");
+                MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: OnDesiredPropertiesReceivedAsync caused by {ex}");
                 retStatus = false;
                 return retStatus;
             }
@@ -174,13 +194,12 @@ namespace IotedgeV2HttpServer
         static async Task WaitRequestAsync(CancellationToken ct)
         {
             MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Start Method: WaitRequestAsync");
-            string prefix = Environment.GetEnvironmentVariable("UriPrefix");
-            if (string.IsNullOrEmpty(prefix))
+            string prefix = Util.GetEnvironmentVariable<string>("UriPrefix", true);
+            
+            // prefixが'/'で終わっていなければ末尾に'/'を付与
+            if (!prefix.EndsWith('/'))
             {
-                var errmsg = $"Environment Variable \"UriPrefix\" is not set.";
-                MyLogger.WriteLog(ILogger.LogLevel.ERROR, $"{errmsg}", true);
-                MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: WaitRequestAsync caused by {errmsg}");
-                throw new ArgumentException(errmsg);
+                prefix += '/';
             }
             MyLogger.WriteLog(ILogger.LogLevel.INFO, $"Environment Variable \"UriPrefix\" is {prefix}");
 
@@ -380,11 +399,38 @@ namespace IotedgeV2HttpServer
                 }
             }
 
-            if(ApplicationStateChangeResult.Success == stateChangeResult && true == restartFlag)
+            if (restartFlag)
             {
                 var exitmsg = $"restartFlag = {restartFlag}";
                 MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"Exit Method: HandleHttpRequests caused by {exitmsg}");
-                await appEngine.SetApplicationRestartAsync();
+
+                // SetApplicationRestartAsync が Ignored を返す間はリトライを続け、iotedge restart なしでの復旧を試みる
+                int retryCount = 0;
+                ApplicationStateChangeResult restartResult = await appEngine.SetApplicationRestartAsync();
+                while (ApplicationStateChangeResult.Success != restartResult && !ct.IsCancellationRequested)
+                {
+                    retryCount++;
+                    // 同じ ModuleClient が二度と回復不能な状態に陥っているケースへの保険として、上限到達時はプロセスごと終了しコンテナ再起動に委ねる
+                    if (RESTART_MAX_RETRY_COUNT <= retryCount)
+                    {
+                        MyLogger.WriteLog(ILogger.LogLevel.ERROR, $"SetApplicationRestartAsync failed {retryCount} times in a row. Exiting process to force a clean container restart.", true);
+                        Environment.Exit(1);
+                    }
+                    MyLogger.WriteLog(ILogger.LogLevel.ERROR, $"SetApplicationRestartAsync is not 'Success'. Will retry ({retryCount}/{RESTART_MAX_RETRY_COUNT}).", true);
+                    try
+                    {
+                        await Task.Delay(RESTART_RETRY_INTERVAL_MS, ct);
+                    }
+                    catch (TaskCanceledException)
+                    {
+                        break;
+                    }
+                    restartResult = await appEngine.SetApplicationRestartAsync();
+                }
+                if (ApplicationStateChangeResult.Success == restartResult)
+                {
+                    MyLogger.WriteLog(ILogger.LogLevel.INFO, "SetApplicationRestartAsync succeeded.");
+                }
             }
 
             MyLogger.WriteLog(ILogger.LogLevel.TRACE, $"End Method: HandleHttpRequests");
