@@ -1,11 +1,11 @@
-FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build-env
+FROM mcr.microsoft.com/dotnet/sdk:10.0 AS build-env
 WORKDIR /app
 
 COPY . ./
 RUN dotnet restore
 RUN dotnet publish -c Release -o out
 
-FROM mcr.microsoft.com/dotnet/runtime:8.0-bookworm-slim
+FROM mcr.microsoft.com/dotnet/runtime:10.0-noble-chiseled-extra
 WORKDIR /app
 COPY --from=build-env /app/out ./
 
@@ -15,7 +15,7 @@ RUN chmod +x ./entrypoint.sh
 
 RUN { \
     echo "module name : HttpServer"; \
-    echo "module version : 6.0.2"; \
+    echo "module version : 7.0.1"; \
 } > ./application.info
 
 RUN useradd -ms /bin/bash moduleuser
