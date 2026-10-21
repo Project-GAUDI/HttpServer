@@ -27,6 +27,7 @@
 * [LICENSE](#license)
 
 ## 概要
+
 HttpServerは、HTTPリクエストを受信して、メッセージとして送信するAzure IoT edgeモジュールです。
 
 ## 機能
@@ -80,9 +81,9 @@ docker push ghcr.io/<YOUR_GITHUB_USERNAME>/httpserver:<VERSION>
 
 ## 動作保証環境
 
-| Module Version | IoTEdge         | edgeAgent       | edgeHub         | amd64 verified on | arm64v8 verified on | arm32v7 verified on |
-| -------------- | --------------- | --------------- | --------------- | ----------------- | ------------------- | ------------------- |
-| 6.0.2          | 1.5.0<br>1.5.16 | 1.5.6<br>1.5.19 | 1.5.6<br>1.5.19 | ubuntu22.04       | －                  | －                  |
+| Module Version | IoTEdge | edgeAgent | edgeHub | amd64 verified on | arm64v8 verified on | arm32v7 verified on |
+| -------------- | ------- | --------- | ------- | ----------------- | ------------------- | ------------------- |
+| 7.0.1          | 1.6.4   | 1.6.4     | 1.6.4   | ubuntu24.04       | －                  | －                  |
 
 ## Deployment 設定値
 
@@ -90,19 +91,19 @@ docker push ghcr.io/<YOUR_GITHUB_USERNAME>/httpserver:<VERSION>
 
 #### 環境変数の値
 
-| Key                       | Required | Default | Recommend | Description                                                     |
-| ------------------------- | -------- | ------- | --------- | ---------------------------------------------------------------- |
-| UriPrefix                 | 〇       |         |           | リクエストを待ち受けるポートを指定する。 <br>例）http://+:8080/ <br> （「+」の箇所は状況に応じてホスト名やIPアドレスでも可） |
-| TransportProtocol         |          | Amqp    |           | ModuleClient の接続プロトコル。<br>["Amqp", "Mqtt"] |
-| LogLevel                  |          | info    |           | 出力ログレベル。<br>["trace", "debug", "info", "warn", "error"] |
+| Key               | Type   | Required | Conditions                                  | Default | Description                                                                                                        |
+| ----------------- | ------ | -------- | ------------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------ |
+| UriPrefix         | string | 〇       |                                             |         | リクエストを待ち受けるURIを指定する。http://[ IPアドレス ] : [ ポート番号 ]/ <br> IPアドレス部を「+」で指定可能。※ |
+| TransportProtocol | string |          | ["Amqp", "Mqtt"]                            | Amqp    | ModuleClient の接続プロトコル。                                                                                    |
+| LogLevel          | string |          | ["trace", "debug", "info", "warn", "error"] | info    | 出力ログレベル。                                                                                                   |
 
 ### Desired Properties
 
 #### Desired Properties の値
 
-| JSON Key | Type   | Required | Default | Recommend | Description                  |
-| -------- | ------ | -------- | ------- | --------- | ---------------------------- |
-| output   | string |          | output  |           | 送信するメッセージのoutput名 |
+| JSON Key | Type   | Required | Conditions | Default | Description                  |
+| -------- | ------ | -------- | ---------- | ------- | ---------------------------- |
+| output   | string |          |            | output  | 送信するメッセージのoutput名 |
 
 #### Desired Properties の記入例
 
@@ -116,17 +117,17 @@ docker push ghcr.io/<YOUR_GITHUB_USERNAME>/httpserver:<VERSION>
 
 #### Create Option の値
 
-| JSON Key                      | Type   | Required | Description                    |
-| ----------------------------- | ------ | -------- | ------------------------------ |
-| ExposedPorts                  | object | △        | モジュール内の公開ポート設定。ポートバインドに8080を使用する場合は不要。      |
-| &nbsp;  xxxx/tcp              | object | △        | 公開したいポート番号(xは任意の番号)。 |
-| &nbsp; &nbsp; {}              | object | △        | 値は不要。      |
-| HostConfig                    | object | 〇        |                                |
-| &nbsp; PortBindings           | object | 〇        | ポートバインド設定             |
-| &nbsp; &nbsp; 8080/tcp        | object | 〇        | モジュール内の公開ポート       |
-| &nbsp; &nbsp; &nbsp; HostPort | string | 〇        | デバイスにマップするポート番号 |
+| JSON Key                      | Type   | Required | Description                                                              |
+| ----------------------------- | ------ | -------- | ------------------------------------------------------------------------ |
+| ExposedPorts                  | object | △        | モジュール内の公開ポート設定。ポートバインドに8080を使用する場合は不要。 |
+| &emsp;  xxxx/tcp              | object | △        | 公開したいポート番号(xは任意の番号)。                                    |
+| &emsp; &emsp; {}              | object | △        | 値は不要。                                                               |
+| HostConfig                    | object | 〇       |                                                                          |
+| &emsp; PortBindings           | object | 〇       | ポートバインド設定                                                       |
+| &emsp; &emsp; 8080/tcp        | object | 〇       | モジュール内の公開ポート                                                 |
+| &emsp; &emsp; &emsp; HostPort | string | 〇       | デバイスにマップするポート番号                                           |
 
-※開放するポートによって、「"8080/tcp"」（モジュール側）と「"HostPort": "80"」（ホスト側）の値を変更すること <br>
+※開放するポートによって、「"8080/tcp"」（モジュール側）と「"HostPort": "80"」（ホスト側）の値を変更すること  
 
 #### Create Option の記入例
 
@@ -161,13 +162,14 @@ docker push ghcr.io/<YOUR_GITHUB_USERNAME>/httpserver:<VERSION>
     }
   }
 ```
+
 ### startupOrder
 
 #### startupOrder の値
 
-| JSON Key      | Type    | Required | Default | Recommend | Description |
-| ------------- | ------- | -------- | ------- | --------- | ----------- |
-| startupOrder  | uint    |  | 4294967295 | 200 | モジュールの起動順序。数字が小さいほど先に起動される。<br>["0"から"4294967295"] |
+| JSON Key     | Type   | Required | Conditions                   | Default    | Recommend | Description                                            |
+| ------------ | ------ | -------- | ---------------------------- | ---------- | --------- | ------------------------------------------------------ |
+| startupOrder | number |          | 0 以上 4294967295 以下の整数 | 4294967295 | 200       | モジュールの起動順序。数字が小さいほど先に起動される。 |
 
 #### startupOrder の記入例
 
@@ -181,30 +183,54 @@ docker push ghcr.io/<YOUR_GITHUB_USERNAME>/httpserver:<VERSION>
 
 ### 受信HTTPリクエスト
 
-| Content               | Description             |
-| --------------------- | ----------------------- |
-| メソッド              | POST                    |
-| ヘッダー              | リクエストヘッダー      |
-| &nbsp; additionalData | メッセージの properties(※1) |
-| 本文                  | メッセージの body       |
+| Content               | Description                 |
+| --------------------- | --------------------------- |
+| メソッド              | POSTのみ受信(※1)            |
+| ヘッダー              | リクエストヘッダー          |
+| &emsp; additionalData | メッセージの properties(※2) |
+| 本文                  | メッセージの body           |
 
-※1 additionalData項目自体を複数指定する事はできない。<br>複数のメッセージプロパティを付与する場合、まとめて指定する必要がある。<br>例）
-```
-   additionalData：{"prop1":"aaa", "prop2":"123"}
-```
+※1 POSTメソッドでない場合は処理を終了する。  
+※2 additionalData項目自体を複数指定する事はできない。複数のメッセージプロパティを付与する場合、まとめて指定する必要がある。  
 
+例）
+
+```JSON
+  additionalData: {
+    "filename": "sensor_data_20240115.csv",
+    "row_count": "2"
+  }
+```
 
 ## 送信メッセージ
 
 ### 送信HTTPレスポンス
 
-HTTPリクエストの送信元に返すレスポンス(リクエストの内容に関わらず同一)。
+HTTPリクエストの送信元に返すレスポンス。
+
+#### メッセージ送信成功の場合
 
 | Content              | Description |
 | -------------------- | ----------- |
 | プロトコルバージョン | 1.1         |
 | ステータスコード     | 200         |
 | テキストフレーズ     | "OK"        |
+
+#### メッセージ送信失敗の場合
+
+| Content              | Description                   |
+| -------------------- | ----------------------------- |
+| プロトコルバージョン | 1.1                           |
+| ステータスコード     | 500                           |
+| テキストフレーズ     | "HttpListenerException Error" |
+
+#### アプリケーション実行エラーの場合
+
+| Content              | Description           |
+| -------------------- | --------------------- |
+| プロトコルバージョン | 1.1                   |
+| ステータスコード     | 503                   |
+| テキストフレーズ     | "Service Unavailable" |
 
 ### Message Body
 
@@ -215,6 +241,23 @@ HTTPリクエストの送信元に返すレスポンス(リクエストの内容
 | Key | Description                                                      |
 | --- | ---------------------------------------------------------------- |
 | -   | リクエストのヘッダ「additionalData」キーの中身。名前や数は不定。 |
+
+```JSON
+{
+  "Body":{
+    "RecordList":[
+      {
+        "RecordHeader":["2020/11/11 12:00:00"],
+        "RecordData":["30","40","12:00:00"]
+      }
+    ]
+  },
+  "Properties":{
+    "filename": "sensor_data_20240115.csv",
+    "row_count": "2"
+  }
+}  
+```
 
 ## Direct Method
 
@@ -292,13 +335,13 @@ HTTPリクエストの送信元に返すレスポンス(リクエストの内容
 
 ## ログ出力内容
 
-| LogLevel | 出力概要 |
-| -------- | -------- |
-| error    | [初期化/desired更新/desired取り込み/メッセージ受信]失敗         |
-| warn     | エッジランタイムとの接続リトライ失敗<br>環境変数の1部値不正         |
-| info     | 環境変数の値<br>desired更新通知<br>環境変数の値未設定のためDefault値適用<br>メッセージ[送信/受信]通知         |
-| debug    | 無し     |
-| trace    | メソッドの開始・終了<br>受信メッセージBody  |
+| LogLevel | 出力概要                                                                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| error    | [初期化/モジュールツイン更新/メッセージ送信/リクエスト受信・送信]失敗<br>[環境変数/モジュールツイン]の必須項目未設定<br>[環境変数/モジュールツイン]がConditionsまたはType制約違反 |
+| warn     | エッジランタイムとの接続リトライ失敗                                                                                                                                              |
+| info     | [環境変数/モジュールツイン]の値<br>モジュールツイン更新通知<br>[環境変数/モジュールツイン]の省略可能項目未設定のためDefault値適用<br>メッセージ送信通知                           |
+| debug    | 無し                                                                                                                                                                              |
+| trace    | メソッドの開始・終了<br>受信メッセージBody                                                                                                                                        |
 
 ## ユースケース
 
@@ -308,22 +351,75 @@ HTTPリクエストの送信元に返すレスポンス(リクエストの内容
 
 「IoT Edge Device-1」から「IoT Edge Device-2」へHttpClient・HttpServerを使用してメッセージを転送する。
 
+![schematic diagram](./docs/img/usecase_diagram.drawio.png)
+
+#### 起動順序 startupOrder
+
+| 名称         | 値  |
+| ------------ | --- |
+| startupOrder | 200 |
+
+#### 環境変数
+
+| 名称              | 値             |
+| ----------------- | -------------- |
+| UriPrefix         | http://+:8080/ |
+| TransportProtocol | Amqp           |
+| LogLevel          | info           |
+
+#### コンテナーの作成オプション Create Option
+
+```json
+{
+  "HostConfig": {
+    "PortBindings": {
+      "8080/tcp": [
+        {
+          "HostPort": "80"
+        }
+      ]
+    }
+  }
+}
+```
+
+#### モジュールツインの設定
+
+```JSON
+{
+  "output": "output1"
+}
+```
+
+### 入力内容
+
 #### 受信HTTPリクエスト例
 
-```
-＜Header＞
-  additionalData：{"prop1":"aaa"}
-
-＜Body＞
+```JSON
+<Method>
+  "POST"
+<URI>
+  "http://httpserver01:8080"
+<Header>
+  "additionalData":{
+    "filename": "sensor_data_20240115.csv",
+    "row_count": "2",
+    "country": "JP",
+    "company": "01",
+    "factory": "301",
+    "data_type": "004",
+    "free_area": "30103",
+    "format": "007",
+    "ProductionMode": "2"
+  }
+<Body>
   {
-    "RecordList":[{
-      "RecordHeader": [
-        "2020/11/11  12:00:00"
-      ],
-      "RecordData": [
-        30, 40, 100000
-      ]
-    }]
+    "RecordList":[
+      {
+        "RecordHeader":["2020/11/11 12:00:00"],
+        "RecordData":["30","40","12:00:00"]
+      }
+    ]
   }
 ```
 
@@ -333,21 +429,28 @@ HttpClientが受信したものがそのまま送信メッセージとなる。
 
 #### 出力例
 
-```
-＜プロパティ＞
-  {"prop1":"aaa"}
-
-＜Body＞
-  {
-    "RecordList":[{
-      "RecordHeader": [
-        "2020/11/11  12:00:00"
-      ],
-      "RecordData": [
-        30, 40, 100000
-      ]
-    }]
+```JSON
+{
+  "Body": {
+    "RecordList": [
+      {
+        "RecordHeader":["2020/11/11 12:00:00"],
+        "RecordData":["30","40","12:00:00"]
+      }
+    ]
+  },
+  "Properties":{
+    "filename": "sensor_data_20240115.csv",
+    "row_count": "2",
+    "country": "JP",
+    "company": "01",
+    "factory": "301",
+    "data_type": "004",
+    "free_area": "30103",
+    "format": "007",
+    "ProductionMode": "2"
   }
+}  
 ```
 
 ## Feedback
